@@ -1,0 +1,45 @@
+plugins {
+    java
+    id("io.quarkus") version "3.27.2"
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+group = "com.github.imcf"
+version = "1.0.0-SNAPSHOT"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+val quarkusPlatformGroupId: String by project
+val quarkusPlatformArtifactId: String by project
+val quarkusPlatformVersion: String by project
+
+dependencies {
+    implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
+    implementation(platform("io.quarkiverse.mcp:quarkus-mcp-server-bom:1.10.2"))
+
+    implementation("io.quarkus:quarkus-arc")
+    implementation("io.quarkiverse.mcp:quarkus-mcp-server-stdio")
+    implementation("io.quarkiverse.mcp:quarkus-mcp-server-sse")
+    implementation("org.apache.kafka:kafka-clients:4.2.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+
+    testImplementation("io.quarkus:quarkus-junit5")
+    testImplementation("org.testcontainers:kafka:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+}
+
+tasks.withType<Test> {
+    systemProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager")
+}
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+    options.compilerArgs.add("-parameters")
+}
