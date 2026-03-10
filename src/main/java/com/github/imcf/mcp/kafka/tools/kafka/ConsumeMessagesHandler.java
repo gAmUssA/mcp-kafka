@@ -15,6 +15,7 @@ import org.apache.kafka.common.header.Header;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.imcf.mcp.kafka.client.KafkaClientManager;
+import com.github.imcf.mcp.kafka.serde.SchemaRegistryDeserializer;
 import com.github.imcf.mcp.kafka.tools.BaseToolHandler;
 
 import io.quarkiverse.mcp.server.Tool;
@@ -30,12 +31,16 @@ public class ConsumeMessagesHandler extends BaseToolHandler {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    SchemaRegistryDeserializer schemaRegistryDeserializer;
+
     @Tool(name = "consume-messages", description = "Consume messages from a Kafka topic.")
     ToolResponse consumeMessages(
             @ToolArg(description = "Topic name") String topic,
             @ToolArg(description = "Maximum number of messages to consume", defaultValue = "10") int maxMessages,
             @ToolArg(description = "Timeout in milliseconds", defaultValue = "5000") long timeoutMs,
-            @ToolArg(description = "Start from the beginning of the topic", defaultValue = "true") boolean fromBeginning) {
+            @ToolArg(description = "Start from the beginning of the topic", defaultValue = "true") boolean fromBeginning,
+            @ToolArg(description = "Use Schema Registry for deserialization", defaultValue = "false") boolean useSchemaRegistry) {
         try (KafkaConsumer<byte[], byte[]> consumer = kafkaClientManager.createConsumer()) {
             List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
                 .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
@@ -67,7 +72,16 @@ public class ConsumeMessagesHandler extends BaseToolHandler {
                     msg.put("offset", record.offset());
                     msg.put("timestamp", record.timestamp());
                     msg.put("key", record.key() != null ? new String(record.key(), StandardCharsets.UTF_8) : null);
-                    msg.put("value", record.value() != null ? new String(record.value(), StandardCharsets.UTF_8) : null);
+
+                    if (record.value() != null) {
+                        if (useSchemaRegistry && schemaRegistryDeserializer.isWireFormat(record.value())) {
+                            msg.put("value", schemaRegistryDeserializer.deserialize(record.value()));
+                        } else {
+                            msg.put("value", new String(record.value(), StandardCharsets.UTF_8));
+                        }
+                    } else {
+                        msg.put("value", null);
+                    }
 
                     Map<String, String> headers = new HashMap<>();
                     for (Header header : record.headers()) {
