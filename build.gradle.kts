@@ -29,6 +29,10 @@ dependencies {
     implementation("io.quarkiverse.mcp:quarkus-mcp-server-sse")
     implementation("org.apache.kafka:kafka-clients:4.2.0")
     implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("io.quarkus:quarkus-rest-client-jackson")
+    implementation("org.apache.avro:avro:1.12.0")
+    implementation("com.google.protobuf:protobuf-java:4.29.4")
+    implementation("com.google.protobuf:protobuf-java-util:4.29.4")
 
     testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("org.testcontainers:kafka:1.20.4")

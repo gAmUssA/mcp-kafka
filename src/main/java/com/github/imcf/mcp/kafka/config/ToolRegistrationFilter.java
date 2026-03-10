@@ -6,6 +6,8 @@ import java.util.Set;
 
 import org.jboss.logging.Logger;
 
+import com.github.imcf.mcp.kafka.client.SchemaRegistryClient;
+
 import io.quarkiverse.mcp.server.ToolManager;
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,6 +26,11 @@ public class ToolRegistrationFilter {
         "describe-cluster", "list-consumer-groups", "describe-consumer-group"
     );
 
+    private static final Set<String> SR_TOOLS = Set.of(
+        "list-schemas", "register-schema", "get-schema",
+        "delete-schema", "get-schema-compatibility", "set-schema-compatibility"
+    );
+
     @Inject
     ToolManager toolManager;
 
@@ -32,6 +39,9 @@ public class ToolRegistrationFilter {
 
     @Inject
     KafkaConfig kafkaConfig;
+
+    @Inject
+    SchemaRegistryClient schemaRegistryClient;
 
     @Startup
     void filterTools() {
@@ -49,6 +59,12 @@ public class ToolRegistrationFilter {
             if (KAFKA_TOOLS.contains(name) && isBlank(kafkaConfig.bootstrapServers())) {
                 toolManager.removeTool(name);
                 removed.add(name + " (kafka not configured)");
+                continue;
+            }
+
+            if (SR_TOOLS.contains(name) && !schemaRegistryClient.isConfigured()) {
+                toolManager.removeTool(name);
+                removed.add(name + " (schema registry not configured)");
             }
         }
 

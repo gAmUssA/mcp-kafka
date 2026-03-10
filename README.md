@@ -53,7 +53,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "kafka": {
       "command": "java",
-      "args": ["-jar", "/path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar"],
+      "args": ["-Dquarkus.profile=stdio", "-jar", "/path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar"],
       "env": {
         "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092"
       }
@@ -71,7 +71,7 @@ Add a `.mcp.json` file to your project root:
   "mcpServers": {
     "kafka": {
       "command": "java",
-      "args": ["-jar", "/path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar"],
+      "args": ["-Dquarkus.profile=stdio", "-jar", "/path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar"],
       "env": {
         "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092"
       }
@@ -87,18 +87,17 @@ Or configure globally via Claude Code settings.
 Any MCP client that supports STDIO transport can use:
 
 ```
-command: java -jar /path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar
+command: java -Dquarkus.profile=stdio -jar /path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar
 env:
   KAFKA_BOOTSTRAP_SERVERS: localhost:9092
 ```
 
 ## HTTP/SSE Transport (Remote Server)
 
-For remote deployments, run the server with the `http` profile:
+For remote deployments, run the server directly (HTTP is the default transport):
 
 ```bash
-java -Dquarkus.profile=http \
-     -Dquarkus.http.host=0.0.0.0 \
+java -Dquarkus.http.host=0.0.0.0 \
      -jar build/quarkus-app/quarkus-run.jar
 ```
 
@@ -141,7 +140,7 @@ Configure MCP clients to connect to the remote URL:
 
 | Property            | Env Var             | Default     | Description                                  |
 |---------------------|---------------------|-------------|----------------------------------------------|
-| `quarkus.profile`   | `QUARKUS_PROFILE`   | _(none)_    | Set to `http` for HTTP/SSE transport         |
+| `quarkus.profile`   | `QUARKUS_PROFILE`   | _(none)_    | Set to `stdio` for STDIO transport (MCP clients) |
 | `quarkus.http.host` | `QUARKUS_HTTP_HOST` | `127.0.0.1` | HTTP bind address (use `0.0.0.0` for remote) |
 | `quarkus.http.port` | `QUARKUS_HTTP_PORT` | `8080`      | HTTP server port                             |
 
