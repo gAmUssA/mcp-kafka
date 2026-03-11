@@ -14,6 +14,8 @@ public class FlinkSqlGatewayTestResource implements QuarkusTestResourceLifecycle
 
     private static final String KAFKA_CONNECTOR_URL =
             "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.1-2.0/flink-sql-connector-kafka-4.0.1-2.0.jar";
+    private static final String AVRO_CONFLUENT_URL =
+            "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-avro-confluent-registry/2.2.0/flink-sql-avro-confluent-registry-2.2.0.jar";
 
     private Network network;
     private KafkaContainer kafka;
@@ -34,7 +36,7 @@ public class FlinkSqlGatewayTestResource implements QuarkusTestResourceLifecycle
                 .withExposedPorts(8083)
                 .withCreateContainerCmdModifier(cmd ->
                         cmd.withEntrypoint("bash", "-c",
-                                "wget -q -P /opt/flink/lib/ " + KAFKA_CONNECTOR_URL
+                                "wget -q -P /opt/flink/lib/ " + KAFKA_CONNECTOR_URL + " " + AVRO_CONFLUENT_URL
                                         + " && /opt/flink/bin/sql-gateway.sh start-foreground"
                                         + " -Dsql-gateway.endpoint.rest.address=0.0.0.0"
                                         + " -Dsql-gateway.endpoint.rest.bind-address=0.0.0.0"
