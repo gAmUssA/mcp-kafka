@@ -1,0 +1,18 @@
+{
+  "name": "Docker",
+  "type": "DIRECT",
+  "kafka_cluster": {
+    "bootstrap_servers": "localhost:9092",
+    "ssl": {
+      "enabled": "false"
+    }
+  },
+  "schema_registry": {
+    "uri": "http://localhost:8081",
+    "ssl": {
+      "enabled": "false"
+    }
+  },
+  "formConnectionType": "Apache Kafka",
+  "extVersion": "2.2.2"
+}
