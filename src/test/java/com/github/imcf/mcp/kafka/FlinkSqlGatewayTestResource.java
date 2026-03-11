@@ -25,7 +25,7 @@ public class FlinkSqlGatewayTestResource implements QuarkusTestResourceLifecycle
     public Map<String, String> start() {
         network = Network.newNetwork();
 
-        kafka = new KafkaContainer("apache/kafka-native:latest")
+        kafka = new KafkaContainer("apache/kafka:latest")
                 .withNetwork(network)
                 .withNetworkAliases("kafka")
                 .withListener("kafka:19092");
