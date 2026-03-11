@@ -13,7 +13,7 @@ Designed as a drop-in replacement for `@confluentinc/mcp-confluent`, targeting o
 
 ## Features
 
-- **15 tools** - Kafka topic management, produce/consume, Schema Registry CRUD, topic search, cluster info
+- **22 tools** - Kafka topic management, produce/consume, Schema Registry CRUD, Flink SQL Gateway, topic search, cluster info
 - **Schema Registry** - Register, list, get, delete schemas; produce/consume with Avro serialization (Confluent wire format)
 - **Dual transport** - STDIO (subprocess) and HTTP/SSE (remote server)
 - **Drop-in compatible** - Same MCP tool names and response formats as mcp-confluent
@@ -40,15 +40,21 @@ The built application is in `build/quarkus-app/`.
 
 ### Run with Docker Compose
 
-Start Kafka and the MCP server together:
+Start the full stack with one command:
 
 ```bash
 docker compose up
 ```
 
 This starts:
-- **Kafka** (native image) on `localhost:9092`
-- **MCP server** connected to Kafka
+- **Kafka** on `localhost:9092`
+- **Schema Registry** on `localhost:8081`
+- **Flink SQL Gateway** on `localhost:8083`
+- **MCP server** on `localhost:8080` (HTTP/SSE transport)
+
+All services are health-checked — the MCP server waits for Kafka, Schema Registry, and Flink SQL Gateway to be ready before starting. All 22 tools are enabled.
+
+Connect an MCP client to `http://localhost:8080/mcp/sse` or use the configuration below for STDIO mode.
 
 ## MCP Client Configuration
 
@@ -110,6 +116,27 @@ Add the Schema Registry URL to the environment:
 ```
 
 Schema Registry tools are automatically enabled when `SCHEMA_REGISTRY_URL` is set, and disabled otherwise.
+
+### With Flink SQL Gateway
+
+Add the Flink SQL Gateway URL to the environment:
+
+```json
+{
+  "mcpServers": {
+    "kafka": {
+      "command": "java",
+      "args": ["-Dquarkus.profile=stdio", "-jar", "/path/to/mcp-kafka/build/quarkus-app/quarkus-run.jar"],
+      "env": {
+        "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092",
+        "FLINK_SQL_GATEWAY_URL": "http://localhost:8083"
+      }
+    }
+  }
+}
+```
+
+Flink SQL Gateway tools are automatically enabled when `FLINK_SQL_GATEWAY_URL` is set, and disabled otherwise.
 
 ### Goose / Other MCP Clients (STDIO)
 
@@ -173,6 +200,16 @@ Configure MCP clients to connect to the remote URL:
 | `schema-registry.auth.username` | `SCHEMA_REGISTRY_AUTH_USERNAME` | _(none)_   | Basic auth username                        |
 | `schema-registry.auth.password` | `SCHEMA_REGISTRY_AUTH_PASSWORD` | _(none)_   | Basic auth password                        |
 
+### Flink SQL Gateway
+
+| Property                            | Env Var                             | Default  | Description                                  |
+|-------------------------------------|-------------------------------------|----------|----------------------------------------------|
+| `flink-sql-gateway.url`             | `FLINK_SQL_GATEWAY_URL`             | _(none)_ | Flink SQL Gateway URL (enables Flink tools)  |
+| `flink-sql-gateway.default-catalog` | `FLINK_SQL_GATEWAY_DEFAULT_CATALOG` | _(none)_ | Default catalog for new sessions             |
+| `flink-sql-gateway.default-database`| `FLINK_SQL_GATEWAY_DEFAULT_DATABASE`| _(none)_ | Default database for new sessions            |
+| `flink-sql-gateway.statement-timeout`| `FLINK_SQL_GATEWAY_STATEMENT_TIMEOUT`| `30000` | Max wait time for statement completion (ms)  |
+| `flink-sql-gateway.max-rows`        | `FLINK_SQL_GATEWAY_MAX_ROWS`        | `100`    | Default max result rows per statement        |
+
 ### Transport
 
 | Property            | Env Var             | Default     | Description                                  |
@@ -218,6 +255,20 @@ Automatically enabled when `schema-registry.url` is configured.
 | `delete-schema`            | Soft/hard delete a subject or specific version         |
 | `get-schema-compatibility` | Get compatibility level for a subject or global        |
 | `set-schema-compatibility` | Set compatibility level (BACKWARD, FORWARD, FULL, etc) |
+
+### Flink SQL Gateway Tools
+
+Automatically enabled when `flink-sql-gateway.url` is configured.
+
+| Tool                    | Description                                            |
+|-------------------------|--------------------------------------------------------|
+| `execute-flink-sql`     | Execute arbitrary Flink SQL and return results         |
+| `list-flink-catalogs`   | List all available Flink catalogs                      |
+| `list-flink-databases`  | List databases in a Flink catalog                      |
+| `list-flink-tables`     | List tables in a Flink database                        |
+| `describe-flink-table`  | Describe the schema of a Flink table                   |
+| `get-flink-job-status`  | Get the status of a Flink SQL operation                |
+| `cancel-flink-job`      | Cancel a running Flink SQL operation                   |
 
 ### Schema Registry Serialization
 
@@ -268,6 +319,7 @@ src/main/java/com/github/imcf/mcp/kafka/
     kafka/         # Topic tools, produce/consume, search, topic config
     cluster/       # Cluster tools (describe-cluster)
     schema/        # Schema Registry tools (list, register, get, delete, compatibility)
+    flink/         # Flink SQL Gateway tools (execute-sql, catalogs, databases, tables)
 ```
 
 ## Roadmap
@@ -276,7 +328,7 @@ src/main/java/com/github/imcf/mcp/kafka/
 |-------------|----------------------------------------------------------|---------|
 | **Phase 1** | Core Kafka tools, STDIO + HTTP/SSE transport, Docker     | Done    |
 | **Phase 2** | Schema Registry tools, SR serialization, topic search    | Done    |
-| **Phase 3** | Flink SQL Gateway tools                                  | Planned |
+| **Phase 3** | Flink SQL Gateway tools                                  | Done    |
 | **Phase 4** | Kafka Connect tools                                      | Planned |
 | **Phase 5** | Consumer groups, API key auth, GraalVM native build      | Planned |
 

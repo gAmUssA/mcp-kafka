@@ -20,6 +20,9 @@ public class StartupLogger {
     @Inject
     SchemaRegistryConfig schemaRegistryConfig;
 
+    @Inject
+    FlinkSqlGatewayConfig flinkSqlGatewayConfig;
+
     @Startup
     void logConnectionDetails() {
         LOG.info("==========================================================");
@@ -42,10 +45,19 @@ public class StartupLogger {
             LOG.info("  Schema Registry         : not configured");
         }
 
+        if (flinkSqlGatewayConfig.url().isPresent() && !flinkSqlGatewayConfig.url().get().isBlank()) {
+            LOG.infof("  Flink SQL Gateway URL   : %s", flinkSqlGatewayConfig.url().get());
+        } else {
+            LOG.info("  Flink SQL Gateway       : not configured");
+        }
+
         List<String> features = new ArrayList<>();
         features.add("Kafka tools");
         if (schemaRegistryConfig.url().isPresent() && !schemaRegistryConfig.url().get().isBlank()) {
             features.add("Schema Registry tools");
+        }
+        if (flinkSqlGatewayConfig.url().isPresent() && !flinkSqlGatewayConfig.url().get().isBlank()) {
+            features.add("Flink SQL Gateway tools");
         }
         LOG.infof("  Enabled features        : %s", String.join(", ", features));
         LOG.info("==========================================================");

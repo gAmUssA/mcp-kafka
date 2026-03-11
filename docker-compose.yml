@@ -1,25 +1,82 @@
 services:
   kafka:
     image: apache/kafka-native:latest
+    hostname: kafka
     ports:
       - "9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.9.0
+    hostname: schema-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  flink-sql-gateway:
+    image: flink:2.2.0-java21
+    hostname: flink-sql-gateway
+    ports:
+      - "8083:8083"
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        wget -q -P /opt/flink/lib/ \
+          https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.1-2.0/flink-sql-connector-kafka-4.0.1-2.0.jar && \
+        /opt/flink/bin/sql-gateway.sh start-foreground \
+          -Dsql-gateway.endpoint.rest.address=0.0.0.0 \
+          -Dsql-gateway.endpoint.rest.bind-address=0.0.0.0 \
+          -Dexecution.target=local
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/v1/info"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
 
   mcp-server:
-    build: .
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    build:
+      context: .
+      dockerfile: Dockerfile.jvm
     ports:
-      - "${HTTP_PORT:-8080}:${HTTP_PORT:-8080}"
+      - "8080:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      FLINK_SQL_GATEWAY_URL: http://flink-sql-gateway:8083
     depends_on:
-      - kafka
-    stdin_open: true
-    tty: true
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      flink-sql-gateway:
+        condition: service_healthy

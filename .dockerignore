@@ -1,0 +1,16 @@
+.git
+.gradle
+.claude
+.github
+.history
+.windsurf
+build
+openspec
+docs
+*.md
+!README.md
+.env
+.dockerignore
+Dockerfile
+Dockerfile.jvm
+docker-compose.yml

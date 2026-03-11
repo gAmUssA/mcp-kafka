@@ -7,6 +7,7 @@ import java.util.Set;
 import org.jboss.logging.Logger;
 
 import com.github.imcf.mcp.kafka.client.SchemaRegistryClient;
+import com.github.imcf.mcp.kafka.client.flink.FlinkSqlGatewayClient;
 
 import io.quarkiverse.mcp.server.ToolManager;
 import io.quarkus.runtime.Startup;
@@ -31,6 +32,12 @@ public class ToolRegistrationFilter {
         "delete-schema", "get-schema-compatibility", "set-schema-compatibility"
     );
 
+    private static final Set<String> FLINK_TOOLS = Set.of(
+        "execute-flink-sql", "list-flink-catalogs", "list-flink-databases",
+        "list-flink-tables", "describe-flink-table",
+        "get-flink-job-status", "cancel-flink-job"
+    );
+
     @Inject
     ToolManager toolManager;
 
@@ -42,6 +49,9 @@ public class ToolRegistrationFilter {
 
     @Inject
     SchemaRegistryClient schemaRegistryClient;
+
+    @Inject
+    FlinkSqlGatewayClient flinkSqlGatewayClient;
 
     @Startup
     void filterTools() {
@@ -65,6 +75,12 @@ public class ToolRegistrationFilter {
             if (SR_TOOLS.contains(name) && !schemaRegistryClient.isConfigured()) {
                 toolManager.removeTool(name);
                 removed.add(name + " (schema registry not configured)");
+                continue;
+            }
+
+            if (FLINK_TOOLS.contains(name) && !flinkSqlGatewayClient.isConfigured()) {
+                toolManager.removeTool(name);
+                removed.add(name + " (flink sql gateway not configured)");
             }
         }
 

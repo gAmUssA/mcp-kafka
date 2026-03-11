@@ -29,6 +29,7 @@ dependencies {
     implementation("io.quarkiverse.mcp:quarkus-mcp-server-stdio")
     implementation("io.quarkiverse.mcp:quarkus-mcp-server-sse")
     implementation("org.apache.kafka:kafka-clients:4.2.0")
+    implementation("io.quarkus:quarkus-rest-client-jackson")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("io.confluent:kafka-schema-registry-client:7.9.0")
     implementation("io.confluent:kafka-avro-serializer:7.9.0")
