@@ -1,35 +1,32 @@
 package com.github.imcf.mcp.kafka.client;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.List;
-
-import org.jboss.logging.Logger;
-
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.imcf.mcp.kafka.config.SchemaRegistryConfig;
 
-import jakarta.annotation.PreDestroy;
+import org.jboss.logging.Logger;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-/**
- * HTTP client for Confluent Schema Registry REST API.
- * Handles schema registration, retrieval, deletion, and compatibility configuration.
- */
 @ApplicationScoped
 public class SchemaRegistryClient {
 
     private static final Logger LOG = Logger.getLogger(SchemaRegistryClient.class);
-    private static final String CONTENT_TYPE = "application/vnd.schemaregistry.v1+json";
+    private static final int SCHEMA_CACHE_SIZE = 1000;
 
     @Inject
     SchemaRegistryConfig config;
@@ -37,165 +34,118 @@ public class SchemaRegistryClient {
     @Inject
     ObjectMapper objectMapper;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
-
-    @PreDestroy
-    void shutdown() {
-        // HttpClient doesn't have an explicit close, but we can help GC by nullifying
-        // For Java 21+, HttpClient implements AutoCloseable, but for compatibility we log shutdown
-        LOG.debug("SchemaRegistryClient shutting down");
-    }
+    private volatile CachedSchemaRegistryClient delegate;
+    private volatile RestService restService;
 
     public boolean isConfigured() {
         return config.url().isPresent() && !config.url().get().isBlank();
     }
 
-    private String baseUrl() {
-        return config.url().orElseThrow(() -> new IllegalStateException("Schema Registry URL not configured"));
-    }
+    private CachedSchemaRegistryClient getClient() {
+        if (delegate == null) {
+            synchronized (this) {
+                if (delegate == null) {
+                    String url = config.url().orElseThrow(
+                            () -> new IllegalStateException("Schema Registry URL not configured"));
 
-    private HttpRequest.Builder requestBuilder(String path) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Accept", CONTENT_TYPE);
+                    Map<String, Object> configs = new HashMap<>();
+                    config.auth().ifPresent(auth -> {
+                        auth.username().ifPresent(u -> {
+                            auth.password().ifPresent(p -> {
+                                configs.put("basic.auth.credentials.source", "USER_INFO");
+                                configs.put("basic.auth.user.info", u + ":" + p);
+                            });
+                        });
+                    });
 
-        config.auth().ifPresent(auth -> {
-            if (auth.username().isPresent() && auth.password().isPresent()) {
-                String credentials = auth.username().get() + ":" + auth.password().get();
-                String encoded = Base64.getEncoder().encodeToString(
-                        credentials.getBytes(StandardCharsets.UTF_8));
-                builder.header("Authorization", "Basic " + encoded);
+                    restService = new RestService(url);
+                    delegate = new CachedSchemaRegistryClient(restService, SCHEMA_CACHE_SIZE, configs);
+                    LOG.infof("Schema Registry client initialized: %s", url);
+                }
             }
-        });
-
-        return builder;
+        }
+        return delegate;
     }
 
-    private HttpResponse<String> execute(HttpRequest request) throws Exception {
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 400) {
-            String body = response.body();
-            JsonNode error = objectMapper.readTree(body);
-            String message = error.has("message") ? error.get("message").asText() : body;
-            throw new SchemaRegistryException(response.statusCode(), message);
-        }
-        return response;
+    private RestService getRestService() {
+        getClient(); // ensure initialized
+        return restService;
     }
 
     // --- Subjects ---
 
     public List<String> getSubjects(boolean deleted) throws Exception {
-        String path = "/subjects" + (deleted ? "?deleted=true" : "");
-        HttpResponse<String> response = execute(requestBuilder(path).GET().build());
-        return objectMapper.readValue(response.body(), new TypeReference<>() {});
-    }
-
-    public List<Integer> getVersions(String subject, boolean deleted) throws Exception {
-        String path = "/subjects/" + encode(subject) + "/versions" + (deleted ? "?deleted=true" : "");
-        HttpResponse<String> response = execute(requestBuilder(path).GET().build());
-        return objectMapper.readValue(response.body(), new TypeReference<>() {});
+        return getRestService().getAllSubjects(deleted);
     }
 
     // --- Schemas ---
 
     public JsonNode getSchemaBySubjectVersion(String subject, String version) throws Exception {
-        String ver = version != null ? version : "latest";
-        String path = "/subjects/" + encode(subject) + "/versions/" + ver;
-        HttpResponse<String> response = execute(requestBuilder(path).GET().build());
-        return objectMapper.readTree(response.body());
+        String ver = (version != null && !version.isBlank()) ? version : "latest";
+
+        Schema schema;
+        if ("latest".equals(ver)) {
+            schema = getRestService().getLatestVersion(subject);
+        } else {
+            schema = getRestService().getVersion(subject, Integer.parseInt(ver));
+        }
+
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("subject", schema.getSubject());
+        result.put("version", schema.getVersion());
+        result.put("id", schema.getId());
+        result.put("schemaType", schema.getSchemaType() != null ? schema.getSchemaType() : "AVRO");
+        result.put("schema", schema.getSchema());
+        return result;
     }
 
     public JsonNode getSchemaById(int schemaId) throws Exception {
-        String path = "/schemas/ids/" + schemaId;
-        HttpResponse<String> response = execute(requestBuilder(path).GET().build());
-        return objectMapper.readTree(response.body());
+        SchemaString schemaString = getRestService().getId(schemaId);
+
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("schema", schemaString.getSchemaString());
+        result.put("schemaType", schemaString.getSchemaType() != null ? schemaString.getSchemaType() : "AVRO");
+        return result;
     }
 
     public int registerSchema(String subject, String schema, String schemaType, String references) throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("schema", schema);
+        RegisterSchemaRequest request = new RegisterSchemaRequest();
+        request.setSchema(schema);
         if (schemaType != null && !schemaType.isBlank()) {
-            body.put("schemaType", schemaType);
+            request.setSchemaType(schemaType);
         }
         if (references != null && !references.isBlank()) {
-            body.set("references", objectMapper.readTree(references));
+            List<SchemaReference> refs = objectMapper.readValue(references,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, SchemaReference.class));
+            request.setReferences(refs);
         }
 
-        String path = "/subjects/" + encode(subject) + "/versions";
-        HttpRequest request = requestBuilder(path)
-                .header("Content-Type", CONTENT_TYPE)
-                .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
-                .build();
-
-        HttpResponse<String> response = execute(request);
-        JsonNode result = objectMapper.readTree(response.body());
-        return result.get("id").asInt();
+        return getRestService().registerSchema(request, subject, false).getId();
     }
 
     // --- Delete ---
 
     public List<Integer> deleteSubject(String subject, boolean permanent) throws Exception {
-        String path = "/subjects/" + encode(subject) + (permanent ? "?permanent=true" : "");
-        HttpRequest request = requestBuilder(path).DELETE().build();
-        HttpResponse<String> response = execute(request);
-        return objectMapper.readValue(response.body(), new TypeReference<>() {});
+        return getRestService().deleteSubject(Collections.emptyMap(), subject, permanent);
     }
 
     public int deleteSchemaVersion(String subject, String version, boolean permanent) throws Exception {
-        String path = "/subjects/" + encode(subject) + "/versions/" + version
-                + (permanent ? "?permanent=true" : "");
-        HttpRequest request = requestBuilder(path).DELETE().build();
-        HttpResponse<String> response = execute(request);
-        return objectMapper.readValue(response.body(), Integer.class);
+        return getRestService().deleteSchemaVersion(Collections.emptyMap(), subject, version, permanent);
     }
 
     // --- Compatibility ---
 
     public String getCompatibility(String subject) throws Exception {
-        String path = subject != null
-                ? "/config/" + encode(subject)
-                : "/config";
-        HttpResponse<String> response = execute(requestBuilder(path).GET().build());
-        JsonNode result = objectMapper.readTree(response.body());
-        return result.has("compatibilityLevel")
-                ? result.get("compatibilityLevel").asText()
-                : result.get("compatibility").asText();
+        if (subject != null) {
+            return getRestService().getConfig(subject).getCompatibilityLevel();
+        }
+        return getRestService().getConfig(null).getCompatibilityLevel();
     }
 
     public String setCompatibility(String subject, String level) throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("compatibility", level);
-
-        String path = subject != null
-                ? "/config/" + encode(subject)
-                : "/config";
-        HttpRequest request = requestBuilder(path)
-                .header("Content-Type", CONTENT_TYPE)
-                .PUT(HttpRequest.BodyPublishers.ofString(body.toString()))
-                .build();
-
-        HttpResponse<String> response = execute(request);
-        JsonNode result = objectMapper.readTree(response.body());
-        return result.get("compatibility").asText();
-    }
-
-    /**
-     * URL-encodes a value for use in Schema Registry REST API paths.
-     */
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    public static class SchemaRegistryException extends RuntimeException {
-        private final int statusCode;
-
-        public SchemaRegistryException(int statusCode, String message) {
-            super(message);
-            this.statusCode = statusCode;
-        }
-
-        public int getStatusCode() {
-            return statusCode;
-        }
+        ConfigUpdateRequest request = new ConfigUpdateRequest();
+        request.setCompatibilityLevel(level);
+        ConfigUpdateRequest response = getRestService().updateCompatibility(level, subject);
+        return response.getCompatibilityLevel();
     }
 }

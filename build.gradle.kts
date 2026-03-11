@@ -6,6 +6,7 @@ plugins {
 repositories {
     mavenCentral()
     mavenLocal()
+    maven("https://packages.confluent.io/maven/")
 }
 
 group = "com.github.imcf"
@@ -29,10 +30,10 @@ dependencies {
     implementation("io.quarkiverse.mcp:quarkus-mcp-server-sse")
     implementation("org.apache.kafka:kafka-clients:4.2.0")
     implementation("com.fasterxml.jackson.core:jackson-databind")
-    implementation("io.quarkus:quarkus-rest-client-jackson")
-    implementation("org.apache.avro:avro:1.12.1")
-    implementation("com.google.protobuf:protobuf-java:4.29.4")
-    implementation("com.google.protobuf:protobuf-java-util:4.29.4")
+    implementation("io.confluent:kafka-schema-registry-client:7.9.0")
+    implementation("io.confluent:kafka-avro-serializer:7.9.0")
+    implementation("io.confluent:kafka-json-schema-serializer:7.9.0")
+    implementation("io.confluent:kafka-protobuf-serializer:7.9.0")
 
     testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("org.testcontainers:kafka:2.0.1")

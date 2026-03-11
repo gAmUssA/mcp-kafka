@@ -1,17 +1,17 @@
 package com.github.imcf.mcp.kafka.serde;
 
-import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DecoderFactory;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.github.imcf.mcp.kafka.client.SchemaRegistryClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.imcf.mcp.kafka.config.SchemaRegistryConfig;
+
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -22,7 +22,37 @@ public class SchemaRegistryDeserializer {
     private static final byte MAGIC_BYTE = 0x00;
 
     @Inject
-    SchemaRegistryClient schemaRegistryClient;
+    SchemaRegistryConfig config;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    private volatile KafkaAvroDeserializer avroDeserializer;
+
+    private Map<String, Object> deserializerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                config.url().orElseThrow());
+        config.auth().ifPresent(auth -> {
+            auth.username().ifPresent(u -> auth.password().ifPresent(p -> {
+                props.put("basic.auth.credentials.source", "USER_INFO");
+                props.put("basic.auth.user.info", u + ":" + p);
+            }));
+        });
+        return props;
+    }
+
+    private KafkaAvroDeserializer getAvroDeserializer() {
+        if (avroDeserializer == null) {
+            synchronized (this) {
+                if (avroDeserializer == null) {
+                    avroDeserializer = new KafkaAvroDeserializer();
+                    avroDeserializer.configure(deserializerConfig(), false);
+                }
+            }
+        }
+        return avroDeserializer;
+    }
 
     /**
      * Check if the byte array uses Confluent wire format (starts with magic byte 0x00).
@@ -39,42 +69,12 @@ public class SchemaRegistryDeserializer {
             return new String(data, StandardCharsets.UTF_8);
         }
 
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        buffer.get(); // skip magic byte
-        int schemaId = buffer.getInt();
+        // Use Confluent's KafkaAvroDeserializer which handles wire format + schema lookup
+        Object result = getAvroDeserializer().deserialize(null, data);
 
-        byte[] payload = new byte[buffer.remaining()];
-        buffer.get(payload);
-
-        JsonNode schemaNode = schemaRegistryClient.getSchemaById(schemaId);
-        String schemaText = schemaNode.get("schema").asText();
-        String schemaType = schemaNode.has("schemaType") ? schemaNode.get("schemaType").asText() : "AVRO";
-
-        return switch (schemaType.toUpperCase()) {
-            case "AVRO" -> deserializeAvro(payload, schemaText);
-            case "JSON" -> new String(payload, StandardCharsets.UTF_8);
-            case "PROTOBUF" -> deserializeProtobuf(payload, schemaText);
-            default -> new String(payload, StandardCharsets.UTF_8);
-        };
-    }
-
-    private String deserializeAvro(byte[] payload, String schemaText) throws Exception {
-        Schema schema = new Schema.Parser().parse(schemaText);
-        DatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-        GenericRecord record = reader.read(null,
-                DecoderFactory.get().binaryDecoder(new ByteArrayInputStream(payload), null));
-        return record.toString();
-    }
-
-    private String deserializeProtobuf(byte[] payload, String schemaText) throws Exception {
-        // Skip the message index varint (first byte for simple cases)
-        byte[] messageBytes = new byte[payload.length - 1];
-        System.arraycopy(payload, 1, messageBytes, 0, messageBytes.length);
-
-        // For Protobuf, return the raw bytes as a hex string since dynamic
-        // deserialization requires the full descriptor which is complex
-        // A production implementation would use the schema to build a descriptor
-        // and deserialize to JSON via JsonFormat
-        return new String(payload, StandardCharsets.UTF_8);
+        if (result instanceof GenericRecord) {
+            return result.toString();
+        }
+        return String.valueOf(result);
     }
 }
