@@ -16,6 +16,8 @@ import jakarta.inject.Inject;
 
 public class CreateTopicsHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
@@ -24,6 +26,17 @@ public class CreateTopicsHandler extends BaseToolHandler {
             @ToolArg(description = "Comma-separated list of topic names to create") String topicNames,
             @ToolArg(description = "Number of partitions", defaultValue = "1") int numPartitions,
             @ToolArg(description = "Replication factor", defaultValue = "1") short replicationFactor) {
+
+        if (isBlank(topicNames)) {
+            return error("Topic names are required");
+        }
+        if (numPartitions <= 0) {
+            return error("Number of partitions must be positive");
+        }
+        if (replicationFactor <= 0) {
+            return error("Replication factor must be positive");
+        }
+
         try {
             List<NewTopic> newTopics = List.of(topicNames.split(",")).stream()
                 .map(String::trim)
@@ -31,15 +44,22 @@ public class CreateTopicsHandler extends BaseToolHandler {
                 .map(name -> new NewTopic(name, numPartitions, replicationFactor))
                 .collect(Collectors.toList());
 
+            if (newTopics.isEmpty()) {
+                return error("No valid topic names provided");
+            }
+
             kafkaClientManager.getAdminClient()
                 .createTopics(newTopics)
                 .all()
-                .get(30, TimeUnit.SECONDS);
+                .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             String created = newTopics.stream().map(NewTopic::name).collect(Collectors.joining(","));
             return success("Created topics: " + created);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

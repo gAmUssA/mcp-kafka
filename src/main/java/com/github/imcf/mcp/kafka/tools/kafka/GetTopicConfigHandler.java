@@ -21,6 +21,8 @@ import jakarta.inject.Inject;
 
 public class GetTopicConfigHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
@@ -30,12 +32,17 @@ public class GetTopicConfigHandler extends BaseToolHandler {
     @Tool(name = "get-topic-config", description = "Get the configuration for a Kafka topic.")
     ToolResponse getTopicConfig(
             @ToolArg(description = "Topic name") String topicName) {
+
+        if (isBlank(topicName)) {
+            return error("Topic name is required");
+        }
+
         try {
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
             Map<ConfigResource, Config> configs = kafkaClientManager.getAdminClient()
                 .describeConfigs(List.of(resource))
                 .all()
-                .get(30, TimeUnit.SECONDS);
+                .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             Config config = configs.get(resource);
             Collection<ConfigEntry> entries = config.entries();
@@ -54,8 +61,11 @@ public class GetTopicConfigHandler extends BaseToolHandler {
                 .toList();
 
             return success(objectMapper.writeValueAsString(configList));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

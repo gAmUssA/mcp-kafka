@@ -6,18 +6,13 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.imcf.mcp.kafka.client.SchemaRegistryClient;
-import com.github.imcf.mcp.kafka.tools.BaseToolHandler;
 
 import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 import io.quarkiverse.mcp.server.ToolResponse;
 import jakarta.inject.Inject;
 
-public class ListSchemasHandler extends BaseToolHandler {
-
-    @Inject
-    SchemaRegistryClient schemaRegistryClient;
+public class ListSchemasHandler extends BaseSchemaToolHandler {
 
     @Inject
     ObjectMapper objectMapper;
@@ -26,10 +21,14 @@ public class ListSchemasHandler extends BaseToolHandler {
     ToolResponse listSchemas(
             @ToolArg(description = "Filter subjects by prefix") String subjectPrefix,
             @ToolArg(description = "Include deleted subjects", defaultValue = "false") boolean deleted) {
+
+        ToolResponse configCheck = requireSchemaRegistry();
+        if (configCheck != null) return configCheck;
+
         try {
             List<String> subjects = schemaRegistryClient.getSubjects(deleted);
 
-            if (subjectPrefix != null && !subjectPrefix.isBlank()) {
+            if (isNotBlank(subjectPrefix)) {
                 subjects = subjects.stream()
                         .filter(s -> s.startsWith(subjectPrefix))
                         .toList();
@@ -46,13 +45,16 @@ public class ListSchemasHandler extends BaseToolHandler {
                     entry.put("schema", schema.get("schema").asText());
                     result.put(subject, entry);
                 } catch (Exception e) {
-                    result.put(subject, Map.of("error", e.getMessage()));
+                    result.put(subject, Map.of("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
                 }
             }
 
             return success(objectMapper.writeValueAsString(result));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

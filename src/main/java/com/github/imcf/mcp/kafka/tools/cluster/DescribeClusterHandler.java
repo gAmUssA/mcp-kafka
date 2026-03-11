@@ -18,6 +18,8 @@ import jakarta.inject.Inject;
 
 public class DescribeClusterHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
@@ -29,9 +31,9 @@ public class DescribeClusterHandler extends BaseToolHandler {
         try {
             var result = kafkaClientManager.getAdminClient().describeCluster();
 
-            String clusterId = result.clusterId().get(30, TimeUnit.SECONDS);
-            Node controller = result.controller().get(30, TimeUnit.SECONDS);
-            Collection<Node> nodes = result.nodes().get(30, TimeUnit.SECONDS);
+            String clusterId = result.clusterId().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            Node controller = result.controller().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            Collection<Node> nodes = result.nodes().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             Map<String, Object> clusterInfo = new HashMap<>();
             clusterInfo.put("clusterId", clusterId);
@@ -54,8 +56,11 @@ public class DescribeClusterHandler extends BaseToolHandler {
             clusterInfo.put("brokers", brokers);
 
             return success(objectMapper.writeValueAsString(clusterInfo));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

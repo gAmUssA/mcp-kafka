@@ -15,17 +15,24 @@ import jakarta.inject.Inject;
 
 public class SearchTopicsByNameHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
     @Tool(name = "search-topics-by-name", description = "Search topics by name using regex or substring matching.")
     ToolResponse searchTopicsByName(
             @ToolArg(description = "Search term (substring or regex pattern)") String searchTerm) {
+
+        if (isBlank(searchTerm)) {
+            return error("Search term is required");
+        }
+
         try {
             Set<String> allTopics = kafkaClientManager.getAdminClient()
                     .listTopics()
                     .names()
-                    .get(30, TimeUnit.SECONDS);
+                    .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             Pattern pattern;
             try {
@@ -42,8 +49,11 @@ public class SearchTopicsByNameHandler extends BaseToolHandler {
                     .toList();
 
             return success(String.join(",", matched));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

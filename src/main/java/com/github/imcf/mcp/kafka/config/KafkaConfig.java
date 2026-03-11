@@ -8,6 +8,10 @@ import java.util.Properties;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
+/**
+ * Kafka client configuration mapping. Supports PLAINTEXT, SSL, SASL_PLAINTEXT, and SASL_SSL
+ * security protocols with various SASL mechanisms (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512).
+ */
 @ConfigMapping(prefix = "kafka")
 public interface KafkaConfig {
 
@@ -33,6 +37,18 @@ public interface KafkaConfig {
 
     Optional<String> propertiesFile();
 
+    /**
+     * Escapes special characters in JAAS config values to prevent injection attacks.
+     * Characters that need escaping: backslash and double quote.
+     */
+    private static String escapeJaasValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        // Escape backslashes first, then double quotes
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     default Properties toProperties() {
         Properties props = new Properties();
         props.put("bootstrap.servers", bootstrapServers());
@@ -41,14 +57,16 @@ public interface KafkaConfig {
         saslMechanism().ifPresent(v -> props.put("sasl.mechanism", v));
         saslUsername().ifPresent(username ->
             saslPassword().ifPresent(password -> {
-                String jaasConfig = String.format(
-                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                    username, password);
-                if ("SCRAM-SHA-256".equals(saslMechanism().orElse("")) || "SCRAM-SHA-512".equals(saslMechanism().orElse(""))) {
-                    jaasConfig = String.format(
-                        "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"%s\" password=\"%s\";",
-                        username, password);
+                String escapedUsername = escapeJaasValue(username);
+                String escapedPassword = escapeJaasValue(password);
+                String loginModule = "org.apache.kafka.common.security.plain.PlainLoginModule";
+                String mechanism = saslMechanism().orElse("");
+                if ("SCRAM-SHA-256".equals(mechanism) || "SCRAM-SHA-512".equals(mechanism)) {
+                    loginModule = "org.apache.kafka.common.security.scram.ScramLoginModule";
                 }
+                String jaasConfig = String.format(
+                    "%s required username=\"%s\" password=\"%s\";",
+                    loginModule, escapedUsername, escapedPassword);
                 props.put("sasl.jaas.config", jaasConfig);
             })
         );

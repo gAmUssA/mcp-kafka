@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-@QuarkusTestResource(KafkaTestResource.class)
+@QuarkusTestResource(value = KafkaTestResource.class, restrictToAnnotatedClass = true)
 class SearchTopicsTest {
 
     @Inject

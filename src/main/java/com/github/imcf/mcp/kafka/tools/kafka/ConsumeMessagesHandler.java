@@ -25,6 +25,8 @@ import jakarta.inject.Inject;
 
 public class ConsumeMessagesHandler extends BaseToolHandler {
 
+    private static final long POLL_INTERVAL_MS = 1000;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
@@ -41,6 +43,17 @@ public class ConsumeMessagesHandler extends BaseToolHandler {
             @ToolArg(description = "Timeout in milliseconds", defaultValue = "5000") long timeoutMs,
             @ToolArg(description = "Start from the beginning of the topic", defaultValue = "true") boolean fromBeginning,
             @ToolArg(description = "Use Schema Registry for deserialization", defaultValue = "false") boolean useSchemaRegistry) {
+
+        if (isBlank(topic)) {
+            return error("Topic name is required");
+        }
+        if (maxMessages <= 0) {
+            return error("maxMessages must be positive");
+        }
+        if (timeoutMs <= 0) {
+            return error("timeoutMs must be positive");
+        }
+
         try (KafkaConsumer<byte[], byte[]> consumer = kafkaClientManager.createConsumer()) {
             List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
                 .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
@@ -61,7 +74,7 @@ public class ConsumeMessagesHandler extends BaseToolHandler {
                 if (remaining <= 0) break;
 
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(
-                    Duration.ofMillis(Math.min(remaining, 1000)));
+                    Duration.ofMillis(Math.min(remaining, POLL_INTERVAL_MS)));
 
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     if (messages.size() >= maxMessages) break;
@@ -97,7 +110,7 @@ public class ConsumeMessagesHandler extends BaseToolHandler {
 
             return success(objectMapper.writeValueAsString(messages));
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.github.imcf.mcp.kafka.client;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -16,9 +17,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.imcf.mcp.kafka.config.SchemaRegistryConfig;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+/**
+ * HTTP client for Confluent Schema Registry REST API.
+ * Handles schema registration, retrieval, deletion, and compatibility configuration.
+ */
 @ApplicationScoped
 public class SchemaRegistryClient {
 
@@ -32,6 +38,13 @@ public class SchemaRegistryClient {
     ObjectMapper objectMapper;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    @PreDestroy
+    void shutdown() {
+        // HttpClient doesn't have an explicit close, but we can help GC by nullifying
+        // For Java 21+, HttpClient implements AutoCloseable, but for compatibility we log shutdown
+        LOG.debug("SchemaRegistryClient shutting down");
+    }
 
     public boolean isConfigured() {
         return config.url().isPresent() && !config.url().get().isBlank();
@@ -166,8 +179,11 @@ public class SchemaRegistryClient {
         return result.get("compatibility").asText();
     }
 
+    /**
+     * URL-encodes a value for use in Schema Registry REST API paths.
+     */
     private static String encode(String value) {
-        return value.replace("/", "%2F");
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     public static class SchemaRegistryException extends RuntimeException {

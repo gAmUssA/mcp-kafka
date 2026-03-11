@@ -12,6 +12,8 @@ import jakarta.inject.Inject;
 
 public class ListTopicsHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
@@ -21,10 +23,13 @@ public class ListTopicsHandler extends BaseToolHandler {
             Set<String> topics = kafkaClientManager.getAdminClient()
                 .listTopics()
                 .names()
-                .get(30, TimeUnit.SECONDS);
+                .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             return success(String.join(",", topics));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }

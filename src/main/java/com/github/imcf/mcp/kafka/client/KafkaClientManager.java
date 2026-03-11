@@ -15,8 +15,14 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+/**
+ * Manages Kafka client instances (AdminClient, Producer, Consumer) with lazy initialization.
+ * Provides thread-safe access to shared clients and proper cleanup on shutdown.
+ */
 @ApplicationScoped
 public class KafkaClientManager {
+
+    private static final String CONSUMER_GROUP_PREFIX = "mcp-kafka-oss-";
 
     @Inject
     KafkaConfig kafkaConfig;
@@ -49,11 +55,15 @@ public class KafkaClientManager {
         return producer;
     }
 
+    /**
+     * Creates a new consumer instance with a unique group ID.
+     * Caller is responsible for closing the consumer.
+     */
     public KafkaConsumer<byte[], byte[]> createConsumer() {
         Properties props = kafkaConfig.toProperties();
         props.put("key.deserializer", ByteArrayDeserializer.class.getName());
         props.put("value.deserializer", ByteArrayDeserializer.class.getName());
-        props.put("group.id", "mcp-kafka-oss-" + UUID.randomUUID());
+        props.put("group.id", CONSUMER_GROUP_PREFIX + UUID.randomUUID());
         props.put("auto.offset.reset", "earliest");
         props.put("enable.auto.commit", "false");
         return new KafkaConsumer<>(props);
@@ -65,6 +75,7 @@ public class KafkaClientManager {
             adminClient.close();
         }
         if (producer != null) {
+            producer.flush();
             producer.close();
         }
     }

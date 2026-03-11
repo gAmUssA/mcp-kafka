@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 @QuarkusTest
-@QuarkusTestResource(SchemaRegistryTestResource.class)
+@QuarkusTestResource(value = SchemaRegistryTestResource.class, restrictToAnnotatedClass = true)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SchemaCompatibilityTest {
 

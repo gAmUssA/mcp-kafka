@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-@QuarkusTestResource(SchemaRegistryTestResource.class)
+@QuarkusTestResource(value = SchemaRegistryTestResource.class, restrictToAnnotatedClass = true)
 class SchemaRegistrySerdeTest {
 
     private static final String AVRO_SCHEMA = """

@@ -16,12 +16,19 @@ import jakarta.inject.Inject;
 
 public class DeleteTopicsHandler extends BaseToolHandler {
 
+    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+
     @Inject
     KafkaClientManager kafkaClientManager;
 
     @Tool(name = "delete-topics", description = "Delete one or more Kafka topics. Provide topic names as a comma-separated list.")
     ToolResponse deleteTopics(
             @ToolArg(description = "Comma-separated list of topic names to delete") String topicNames) {
+
+        if (isBlank(topicNames)) {
+            return error("Topic names are required");
+        }
+
         log.infof("delete-topics called with topicNames='%s'", topicNames);
         try {
             List<String> topics = Arrays.stream(topicNames.split(","))
@@ -30,14 +37,14 @@ public class DeleteTopicsHandler extends BaseToolHandler {
                 .collect(Collectors.toList());
 
             if (topics.isEmpty()) {
-                return error("No topic names provided");
+                return error("No valid topic names provided");
             }
 
             // Verify topics exist before deleting
             Set<String> existing = kafkaClientManager.getAdminClient()
                 .listTopics()
                 .names()
-                .get(30, TimeUnit.SECONDS);
+                .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             List<String> notFound = topics.stream()
                 .filter(t -> !existing.contains(t))
@@ -50,11 +57,13 @@ public class DeleteTopicsHandler extends BaseToolHandler {
             kafkaClientManager.getAdminClient()
                 .deleteTopics(topics)
                 .all()
-                .get(30, TimeUnit.SECONDS);
-
+                .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             return success("Deleted topics: " + String.join(", ", topics));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error("Operation interrupted");
         } catch (Exception e) {
-            return error(e.getMessage());
+            return error(e);
         }
     }
 }
