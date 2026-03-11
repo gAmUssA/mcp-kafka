@@ -4,6 +4,7 @@
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://adoptium.net/)
 [![Quarkus](https://img.shields.io/badge/Quarkus-3.27.2-4695EB?logo=quarkus&logoColor=white)](https://quarkus.io/)
 [![Kafka](https://img.shields.io/badge/Apache%20Kafka-4.2-231F20?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![Flink](https://img.shields.io/badge/Apache%20Flink-2.2-E6526F?logo=apacheflink&logoColor=white)](https://flink.apache.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green)](https://modelcontextprotocol.io/)
 
