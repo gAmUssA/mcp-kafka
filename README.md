@@ -203,21 +203,21 @@ Configure MCP clients to connect to the remote URL:
 
 ### Flink SQL Gateway
 
-| Property                            | Env Var                             | Default  | Description                                  |
-|-------------------------------------|-------------------------------------|----------|----------------------------------------------|
-| `flink-sql-gateway.url`             | `FLINK_SQL_GATEWAY_URL`             | _(none)_ | Flink SQL Gateway URL (enables Flink tools)  |
-| `flink-sql-gateway.default-catalog` | `FLINK_SQL_GATEWAY_DEFAULT_CATALOG` | _(none)_ | Default catalog for new sessions             |
-| `flink-sql-gateway.default-database`| `FLINK_SQL_GATEWAY_DEFAULT_DATABASE`| _(none)_ | Default database for new sessions            |
-| `flink-sql-gateway.statement-timeout`| `FLINK_SQL_GATEWAY_STATEMENT_TIMEOUT`| `30000` | Max wait time for statement completion (ms)  |
-| `flink-sql-gateway.max-rows`        | `FLINK_SQL_GATEWAY_MAX_ROWS`        | `100`    | Default max result rows per statement        |
+| Property                              | Env Var                               | Default  | Description                                 |
+|---------------------------------------|---------------------------------------|----------|---------------------------------------------|
+| `flink-sql-gateway.url`               | `FLINK_SQL_GATEWAY_URL`               | _(none)_ | Flink SQL Gateway URL (enables Flink tools) |
+| `flink-sql-gateway.default-catalog`   | `FLINK_SQL_GATEWAY_DEFAULT_CATALOG`   | _(none)_ | Default catalog for new sessions            |
+| `flink-sql-gateway.default-database`  | `FLINK_SQL_GATEWAY_DEFAULT_DATABASE`  | _(none)_ | Default database for new sessions           |
+| `flink-sql-gateway.statement-timeout` | `FLINK_SQL_GATEWAY_STATEMENT_TIMEOUT` | `30000`  | Max wait time for statement completion (ms) |
+| `flink-sql-gateway.max-rows`          | `FLINK_SQL_GATEWAY_MAX_ROWS`          | `100`    | Default max result rows per statement       |
 
 ### Transport
 
-| Property            | Env Var             | Default     | Description                                  |
-|---------------------|---------------------|-------------|----------------------------------------------|
+| Property            | Env Var             | Default     | Description                                      |
+|---------------------|---------------------|-------------|--------------------------------------------------|
 | `quarkus.profile`   | `QUARKUS_PROFILE`   | _(none)_    | Set to `stdio` for STDIO transport (MCP clients) |
-| `quarkus.http.host` | `QUARKUS_HTTP_HOST` | `127.0.0.1` | HTTP bind address (use `0.0.0.0` for remote) |
-| `quarkus.http.port` | `QUARKUS_HTTP_PORT` | `8080`      | HTTP server port                             |
+| `quarkus.http.host` | `QUARKUS_HTTP_HOST` | `127.0.0.1` | HTTP bind address (use `0.0.0.0` for remote)     |
+| `quarkus.http.port` | `QUARKUS_HTTP_PORT` | `8080`      | HTTP server port                                 |
 
 ### Tool Filtering
 
@@ -232,17 +232,17 @@ Configure MCP clients to connect to the remote URL:
 
 ### Kafka Tools
 
-| Tool                    | Description                                           |
-|-------------------------|-------------------------------------------------------|
-| `list-topics`           | List all topics in the Kafka cluster                  |
-| `create-topics`         | Create one or more Kafka topics                       |
-| `delete-topics`         | Delete one or more Kafka topics                       |
-| `produce-message`       | Produce a message (raw or Schema Registry serialized) |
-| `consume-messages`      | Consume messages (raw or Schema Registry deserialized)|
-| `get-topic-config`      | Get the configuration for a Kafka topic               |
-| `alter-topic-config`    | Alter the configuration for a Kafka topic             |
-| `search-topics-by-name` | Search topics by name using regex or substring        |
-| `describe-cluster`      | Get Kafka cluster metadata                            |
+| Tool                    | Description                                            |
+|-------------------------|--------------------------------------------------------|
+| `list-topics`           | List all topics in the Kafka cluster                   |
+| `create-topics`         | Create one or more Kafka topics                        |
+| `delete-topics`         | Delete one or more Kafka topics                        |
+| `produce-message`       | Produce a message (raw or Schema Registry serialized)  |
+| `consume-messages`      | Consume messages (raw or Schema Registry deserialized) |
+| `get-topic-config`      | Get the configuration for a Kafka topic                |
+| `alter-topic-config`    | Alter the configuration for a Kafka topic              |
+| `search-topics-by-name` | Search topics by name using regex or substring         |
+| `describe-cluster`      | Get Kafka cluster metadata                             |
 
 ### Schema Registry Tools
 
@@ -251,7 +251,7 @@ Automatically enabled when `schema-registry.url` is configured.
 | Tool                       | Description                                            |
 |----------------------------|--------------------------------------------------------|
 | `list-schemas`             | List all schemas with optional prefix filter           |
-| `register-schema`          | Register a new schema (Avro, JSON Schema, Protobuf)   |
+| `register-schema`          | Register a new schema (Avro, JSON Schema, Protobuf)    |
 | `get-schema`               | Get a schema by subject and optional version           |
 | `delete-schema`            | Soft/hard delete a subject or specific version         |
 | `get-schema-compatibility` | Get compatibility level for a subject or global        |
