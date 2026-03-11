@@ -30,13 +30,13 @@ dependencies {
     implementation("org.apache.kafka:kafka-clients:4.2.0")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("io.quarkus:quarkus-rest-client-jackson")
-    implementation("org.apache.avro:avro:1.12.0")
+    implementation("org.apache.avro:avro:1.12.1")
     implementation("com.google.protobuf:protobuf-java:4.29.4")
     implementation("com.google.protobuf:protobuf-java-util:4.29.4")
 
     testImplementation("io.quarkus:quarkus-junit5")
-    testImplementation("org.testcontainers:kafka:1.20.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:kafka:2.0.1")
+    testImplementation("org.testcontainers:junit-jupiter:2.0.1")
 }
 
 tasks.withType<Test> {

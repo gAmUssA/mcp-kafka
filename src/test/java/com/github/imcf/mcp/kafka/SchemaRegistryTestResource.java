@@ -21,14 +21,15 @@ public class SchemaRegistryTestResource implements QuarkusTestResourceLifecycleM
 
         kafka = new KafkaContainer("apache/kafka-native:latest")
                 .withNetwork(network)
-                .withNetworkAliases("kafka");
+                .withNetworkAliases("kafka")
+                .withListener("kafka:19092");
         kafka.start();
 
         schemaRegistry = new GenericContainer<>("confluentinc/cp-schema-registry:7.9.0")
                 .withNetwork(network)
                 .withExposedPorts(8081)
                 .withEnv("SCHEMA_REGISTRY_HOST_NAME", "schema-registry")
-                .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "kafka:9092")
+                .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "kafka:19092")
                 .withEnv("SCHEMA_REGISTRY_LISTENERS", "http://0.0.0.0:8081")
                 .waitingFor(Wait.forHttp("/subjects").forStatusCode(200))
                 .dependsOn(kafka);
