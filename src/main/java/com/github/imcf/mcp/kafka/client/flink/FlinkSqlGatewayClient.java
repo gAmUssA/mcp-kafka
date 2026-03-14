@@ -98,18 +98,36 @@ public class FlinkSqlGatewayClient {
 
     private StatementResult doExecuteStatement(String sql, int maxRows) throws Exception {
         String session = getOrCreateSession();
+        boolean isStreamingDml = isStreamingStatement(sql);
 
         ExecuteStatementRequest request = new ExecuteStatementRequest(sql);
         ExecuteStatementResponse response = getApi().executeStatement(session, request);
         String opHandle = response.getOperationHandle();
         LOG.debugf("Statement submitted, operation handle: %s", opHandle);
 
-        waitForCompletion(session, opHandle);
+        waitForCompletion(session, opHandle, isStreamingDml);
+
+        if (isStreamingDml) {
+            // For INSERT INTO, the job is running — return the operation handle without fetching results
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("result", "Job submitted successfully");
+            info.put("operationHandle", opHandle);
+            return new StatementResult(null, List.of(info), false, opHandle);
+        }
 
         return fetchAllResults(session, opHandle, maxRows);
     }
 
-    private void waitForCompletion(String session, String operationHandle) throws Exception {
+    /**
+     * Check if the SQL is a streaming DML statement (INSERT INTO) that will
+     * stay in RUNNING state rather than reaching FINISHED.
+     */
+    private boolean isStreamingStatement(String sql) {
+        String trimmed = sql.trim().toUpperCase();
+        return trimmed.startsWith("INSERT ");
+    }
+
+    private void waitForCompletion(String session, String operationHandle, boolean acceptRunning) throws Exception {
         long deadline = System.currentTimeMillis() + config.statementTimeout();
 
         while (System.currentTimeMillis() < deadline) {
@@ -119,8 +137,14 @@ public class FlinkSqlGatewayClient {
             if ("FINISHED".equals(s)) {
                 return;
             }
+            if (acceptRunning && "RUNNING".equals(s)) {
+                LOG.infof("Streaming job is running, operation handle: %s", operationHandle);
+                return;
+            }
             if ("ERROR".equals(s)) {
-                throw new RuntimeException("Flink SQL statement failed: " + s);
+                String errorMsg = status.getErrorMessage();
+                throw new RuntimeException("Flink SQL statement failed: " +
+                        (errorMsg != null ? errorMsg : s));
             }
             if ("CANCELED".equals(s)) {
                 throw new RuntimeException("Flink SQL statement was canceled");
