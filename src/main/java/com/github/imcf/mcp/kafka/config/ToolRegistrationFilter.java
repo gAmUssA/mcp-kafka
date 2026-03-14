@@ -9,6 +9,8 @@ import org.jboss.logging.Logger;
 import com.github.imcf.mcp.kafka.client.SchemaRegistryClient;
 import com.github.imcf.mcp.kafka.client.flink.FlinkSqlGatewayClient;
 
+import io.quarkiverse.mcp.server.PromptManager;
+import io.quarkiverse.mcp.server.ResourceManager;
 import io.quarkiverse.mcp.server.ToolManager;
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,6 +20,16 @@ import jakarta.inject.Inject;
 public class ToolRegistrationFilter {
 
     private static final Logger LOG = Logger.getLogger(ToolRegistrationFilter.class);
+
+    private static final Set<String> KAFKA_RESOURCES = Set.of(
+        "kafka-cluster-overview", "kafka-health-check",
+        "kafka-under-replicated-partitions", "kafka-consumer-lag-report"
+    );
+
+    private static final Set<String> KAFKA_PROMPTS = Set.of(
+        "kafka_cluster_overview", "kafka_health_check",
+        "kafka_under_replicated_partitions", "kafka_consumer_lag_report"
+    );
 
     private static final Set<String> KAFKA_TOOLS = Set.of(
         "list-topics", "create-topics", "delete-topics",
@@ -40,6 +52,12 @@ public class ToolRegistrationFilter {
 
     @Inject
     ToolManager toolManager;
+
+    @Inject
+    ResourceManager resourceManager;
+
+    @Inject
+    PromptManager promptManager;
 
     @Inject
     ToolFilter toolFilter;
@@ -86,6 +104,31 @@ public class ToolRegistrationFilter {
 
         if (!removed.isEmpty()) {
             LOG.infof("Disabled tools: %s", removed);
+        }
+
+        // Filter resources when Kafka is not configured
+        if (isBlank(kafkaConfig.bootstrapServers())) {
+            List<String> removedResources = new ArrayList<>();
+            for (var info : resourceManager) {
+                if (KAFKA_RESOURCES.contains(info.name())) {
+                    resourceManager.removeResource(info.name());
+                    removedResources.add(info.name());
+                }
+            }
+            if (!removedResources.isEmpty()) {
+                LOG.infof("Disabled resources (kafka not configured): %s", removedResources);
+            }
+
+            List<String> removedPrompts = new ArrayList<>();
+            for (var info : promptManager) {
+                if (KAFKA_PROMPTS.contains(info.name())) {
+                    promptManager.removePrompt(info.name());
+                    removedPrompts.add(info.name());
+                }
+            }
+            if (!removedPrompts.isEmpty()) {
+                LOG.infof("Disabled prompts (kafka not configured): %s", removedPrompts);
+            }
         }
     }
 
