@@ -27,8 +27,8 @@ public class ToolRegistrationFilter {
     );
 
     private static final Set<String> KAFKA_PROMPTS = Set.of(
-        "kafka_cluster_overview", "kafka_health_check",
-        "kafka_under_replicated_partitions", "kafka_consumer_lag_report"
+        "kafka-cluster-overview", "kafka-health-check",
+        "kafka-under-replicated-partitions", "kafka-consumer-lag-report"
     );
 
     private static final Set<String> KAFKA_TOOLS = Set.of(

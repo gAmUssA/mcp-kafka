@@ -28,6 +28,9 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.github.imcf.mcp.kafka.config.KafkaConfig;
+import com.github.imcf.mcp.kafka.model.ClusterOverview;
+import com.github.imcf.mcp.kafka.model.ConsumerLagReport;
+import com.github.imcf.mcp.kafka.model.UnderReplicatedPartitionReport;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -87,22 +90,24 @@ public class KafkaClientManager {
         return new KafkaConsumer<>(props);
     }
 
-    private static final int ADMIN_TIMEOUT_SECONDS = 30;
+    private int adminTimeout() {
+        return kafkaConfig.adminTimeoutSeconds();
+    }
 
     /**
-     * Returns a cluster overview map with broker count, controller ID, topic/partition counts,
+     * Returns a cluster overview with broker count, controller ID, topic/partition counts,
      * under-replicated partitions, offline partitions, and health status.
      */
-    public Map<String, Object> getClusterOverview() throws Exception {
+    public ClusterOverview getClusterOverview() throws Exception {
         var admin = getAdminClient();
         var clusterResult = admin.describeCluster();
 
-        Collection<Node> nodes = clusterResult.nodes().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        Node controller = clusterResult.controller().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        Collection<Node> nodes = clusterResult.nodes().get(adminTimeout(), TimeUnit.SECONDS);
+        Node controller = clusterResult.controller().get(adminTimeout(), TimeUnit.SECONDS);
 
-        Set<String> topicNames = admin.listTopics().names().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        Set<String> topicNames = admin.listTopics().names().get(adminTimeout(), TimeUnit.SECONDS);
         Map<String, TopicDescription> topics = admin.describeTopics(topicNames)
-                .allTopicNames().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                .allTopicNames().get(adminTimeout(), TimeUnit.SECONDS);
 
         int totalPartitions = 0;
         int underReplicated = 0;
@@ -120,35 +125,35 @@ public class KafkaClientManager {
         }
 
         List<Integer> offlineBrokerIds = new ArrayList<>();
-        String healthStatus = (underReplicated == 0 && offline == 0 && !offlineBrokerIds.isEmpty() == false)
+        // Note: AdminClient.describeCluster().nodes() only returns active nodes.
+        // Determining truly offline nodes requires checking against bootstrap servers or using more advanced metadata.
+        
+        String healthStatus = (underReplicated == 0 && offline == 0)
                 ? "healthy" : "unhealthy";
-        if (underReplicated == 0 && offline == 0) {
-            healthStatus = "healthy";
-        }
 
-        Map<String, Object> overview = new HashMap<>();
-        overview.put("timestamp", Instant.now().toString());
-        overview.put("broker_count", nodes.size());
-        overview.put("controller_id", controller.id());
-        overview.put("topic_count", topicNames.size());
-        overview.put("partition_count", totalPartitions);
-        overview.put("under_replicated_partitions", underReplicated);
-        overview.put("offline_partitions", offline);
-        overview.put("offline_broker_ids", offlineBrokerIds);
-        overview.put("health_status", healthStatus);
-        return overview;
+        return new ClusterOverview(
+                Instant.now().toString(),
+                nodes.size(),
+                controller.id(),
+                topicNames.size(),
+                totalPartitions,
+                underReplicated,
+                offline,
+                offlineBrokerIds,
+                healthStatus
+        );
     }
 
     /**
      * Returns under-replicated partition details: partitions where ISR count < replication factor.
      */
-    public Map<String, Object> getUnderReplicatedPartitions() throws Exception {
+    public UnderReplicatedPartitionReport getUnderReplicatedPartitions() throws Exception {
         var admin = getAdminClient();
-        Set<String> topicNames = admin.listTopics().names().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        Set<String> topicNames = admin.listTopics().names().get(adminTimeout(), TimeUnit.SECONDS);
         Map<String, TopicDescription> topics = admin.describeTopics(topicNames)
-                .allTopicNames().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                .allTopicNames().get(adminTimeout(), TimeUnit.SECONDS);
 
-        List<Map<String, Object>> details = new ArrayList<>();
+        List<UnderReplicatedPartitionReport.Detail> details = new ArrayList<>();
         for (TopicDescription td : topics.values()) {
             for (TopicPartitionInfo pi : td.partitions()) {
                 if (pi.isr().size() < pi.replicas().size()) {
@@ -157,44 +162,44 @@ public class KafkaClientManager {
                     List<Integer> missingReplicas = replicaIds.stream()
                             .filter(id -> !isrIds.contains(id)).toList();
 
-                    Map<String, Object> detail = new HashMap<>();
-                    detail.put("topic", td.name());
-                    detail.put("partition", pi.partition());
-                    detail.put("leader", pi.leader() != null ? pi.leader().id() : -1);
-                    detail.put("replica_count", pi.replicas().size());
-                    detail.put("isr_count", pi.isr().size());
-                    detail.put("replicas", replicaIds);
-                    detail.put("isr", isrIds);
-                    detail.put("missing_replicas", missingReplicas);
-                    details.add(detail);
+                    details.add(new UnderReplicatedPartitionReport.Detail(
+                            td.name(),
+                            pi.partition(),
+                            pi.leader() != null ? pi.leader().id() : -1,
+                            pi.replicas().size(),
+                            pi.isr().size(),
+                            replicaIds,
+                            isrIds,
+                            missingReplicas
+                    ));
                 }
             }
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("timestamp", Instant.now().toString());
-        result.put("under_replicated_partition_count", details.size());
-        result.put("details", details);
-        result.put("recommendations", List.of(
-                "Check broker health for any offline or struggling brokers",
-                "Verify network connectivity between brokers",
-                "Monitor disk space on broker nodes",
-                "Review broker logs for detailed error messages",
-                "Consider increasing replication timeouts if network is slow"
-        ));
-        return result;
+        return new UnderReplicatedPartitionReport(
+                Instant.now().toString(),
+                details.size(),
+                details,
+                List.of(
+                        "Check broker health for any offline or struggling brokers",
+                        "Verify network connectivity between brokers",
+                        "Monitor disk space on broker nodes",
+                        "Review broker logs for detailed error messages",
+                        "Consider increasing replication timeouts if network is slow"
+                )
+        );
     }
 
     /**
      * Returns consumer group lag analysis with group summaries and high-lag details.
      */
-    public Map<String, Object> getConsumerGroupLag(long threshold) throws Exception {
+    public ConsumerLagReport getConsumerGroupLag(long threshold) throws Exception {
         var admin = getAdminClient();
         Collection<ConsumerGroupListing> groups = admin.listConsumerGroups()
-                .all().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                .all().get(adminTimeout(), TimeUnit.SECONDS);
 
-        List<Map<String, Object>> groupSummaries = new ArrayList<>();
-        List<Map<String, Object>> highLagDetails = new ArrayList<>();
+        List<ConsumerLagReport.GroupSummary> groupSummaries = new ArrayList<>();
+        List<ConsumerLagReport.HighLagDetail> highLagDetails = new ArrayList<>();
 
         for (ConsumerGroupListing group : groups) {
             String groupId = group.groupId();
@@ -206,7 +211,7 @@ public class KafkaClientManager {
             try {
                 ListConsumerGroupOffsetsResult offsetsResult = admin.listConsumerGroupOffsets(groupId);
                 Map<TopicPartition, OffsetAndMetadata> offsets = offsetsResult.partitionsToOffsetAndMetadata()
-                        .get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                        .get(adminTimeout(), TimeUnit.SECONDS);
 
                 if (offsets.isEmpty()) {
                     continue;
@@ -216,7 +221,7 @@ public class KafkaClientManager {
                 Map<TopicPartition, OffsetSpec> endOffsetSpecs = offsets.keySet().stream()
                         .collect(Collectors.toMap(tp -> tp, tp -> OffsetSpec.latest()));
                 Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets =
-                        admin.listOffsets(endOffsetSpecs).all().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                        admin.listOffsets(endOffsetSpecs).all().get(adminTimeout(), TimeUnit.SECONDS);
 
                 long totalLag = 0;
                 Set<String> topics = offsets.keySet().stream()
@@ -229,47 +234,48 @@ public class KafkaClientManager {
                     long lag = Math.max(0, logEndOffset - currentOffset);
                     totalLag += lag;
 
-                    if (lag > threshold) {
-                        Map<String, Object> lagDetail = new HashMap<>();
-                        lagDetail.put("group_id", groupId);
-                        lagDetail.put("topic", tp.topic());
-                        lagDetail.put("partition", tp.partition());
-                        lagDetail.put("current_offset", currentOffset);
-                        lagDetail.put("log_end_offset", logEndOffset);
-                        lagDetail.put("lag", lag);
-                        highLagDetails.add(lagDetail);
+                    if (lag >= threshold) {
+                        highLagDetails.add(new ConsumerLagReport.HighLagDetail(
+                                groupId,
+                                tp.topic(),
+                                tp.partition(),
+                                currentOffset,
+                                logEndOffset,
+                                lag
+                        ));
                     }
                 }
 
                 var groupDescription = admin.describeConsumerGroups(List.of(groupId))
-                        .all().get(ADMIN_TIMEOUT_SECONDS, TimeUnit.SECONDS).get(groupId);
+                        .all().get(adminTimeout(), TimeUnit.SECONDS).get(groupId);
 
-                Map<String, Object> summary = new HashMap<>();
-                summary.put("group_id", groupId);
-                summary.put("state", groupDescription.state().toString());
-                summary.put("member_count", groupDescription.members().size());
-                summary.put("topic_count", topics.size());
-                summary.put("total_lag", totalLag);
-                summary.put("has_high_lag", totalLag > threshold);
-                groupSummaries.add(summary);
+                groupSummaries.add(new ConsumerLagReport.GroupSummary(
+                        groupId,
+                        groupDescription.state().toString(),
+                        groupDescription.members().size(),
+                        topics.size(),
+                        totalLag,
+                        totalLag >= threshold
+                ));
             } catch (Exception e) {
-                // Skip groups that can't be queried
+                // Log the error and continue with other groups
+                System.err.println("[ERROR] Failed to fetch lag for consumer group " + groupId + ": " + e.getMessage());
             }
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("timestamp", Instant.now().toString());
-        result.put("lag_threshold", threshold);
-        result.put("group_count", groupSummaries.size());
-        result.put("group_summary", groupSummaries);
-        result.put("high_lag_details", highLagDetails);
-        result.put("recommendations", List.of(
-                "Check consumer instances for errors or slowdowns",
-                "Consider scaling up consumer groups with high lag",
-                "Review consumer configuration settings",
-                "Examine processing bottlenecks in consumer application logic"
-        ));
-        return result;
+        return new ConsumerLagReport(
+                Instant.now().toString(),
+                threshold,
+                groupSummaries.size(),
+                groupSummaries,
+                highLagDetails,
+                List.of(
+                        "Check consumer instances for errors or slowdowns",
+                        "Consider scaling up consumer groups with high lag",
+                        "Review consumer configuration settings",
+                        "Examine processing bottlenecks in consumer application logic"
+                )
+        );
     }
 
     @PreDestroy

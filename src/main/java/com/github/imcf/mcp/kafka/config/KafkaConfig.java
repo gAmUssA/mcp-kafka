@@ -37,6 +37,12 @@ public interface KafkaConfig {
 
     Optional<String> propertiesFile();
 
+    @WithDefault("30")
+    int adminTimeoutSeconds();
+
+    @WithDefault("1000")
+    long defaultLagThreshold();
+
     /**
      * Escapes special characters in JAAS config values to prevent injection attacks.
      * Characters that need escaping: backslash and double quote.

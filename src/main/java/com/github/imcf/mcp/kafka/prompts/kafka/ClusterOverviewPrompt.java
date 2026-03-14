@@ -3,6 +3,7 @@ package com.github.imcf.mcp.kafka.prompts.kafka;
 import java.util.Map;
 
 import com.github.imcf.mcp.kafka.client.KafkaClientManager;
+import com.github.imcf.mcp.kafka.model.ClusterOverview;
 import com.github.imcf.mcp.kafka.prompts.BasePromptHandler;
 
 import io.quarkiverse.mcp.server.Prompt;
@@ -14,13 +15,13 @@ public class ClusterOverviewPrompt extends BasePromptHandler {
     @Inject
     KafkaClientManager kafkaClientManager;
 
-    @Prompt(name = "kafka_cluster_overview",
+    @Prompt(name = "kafka-cluster-overview",
             description = "Generates a comprehensive, human-readable summary of Kafka cluster health.")
     PromptMessage clusterOverview() throws Exception {
-        Map<String, Object> overview = kafkaClientManager.getClusterOverview();
+        ClusterOverview overview = kafkaClientManager.getClusterOverview();
 
-        String healthy = "healthy".equals(overview.get("health_status")) ? "Healthy" : "Unhealthy";
-        String statusIcon = "healthy".equals(overview.get("health_status")) ? "OK" : "WARNING";
+        String healthy = "healthy".equals(overview.healthStatus()) ? "Healthy" : "Unhealthy";
+        String statusIcon = "healthy".equals(overview.healthStatus()) ? "OK" : "WARNING";
 
         String content = """
                 # Kafka Cluster Overview
@@ -36,13 +37,13 @@ public class ClusterOverviewPrompt extends BasePromptHandler {
 
                 **Overall Status**: %s %s
                 """.formatted(
-                overview.get("timestamp"),
-                overview.get("broker_count"),
-                overview.get("controller_id"),
-                overview.get("topic_count"),
-                overview.get("partition_count"),
-                overview.get("under_replicated_partitions"),
-                overview.get("offline_partitions"),
+                overview.timestamp(),
+                overview.brokerCount(),
+                overview.controllerId(),
+                overview.topicCount(),
+                overview.partitionCount(),
+                overview.underReplicatedPartitions(),
+                overview.offlinePartitions(),
                 statusIcon,
                 healthy);
 

@@ -15,6 +15,8 @@ Designed as a drop-in replacement for `@confluentinc/mcp-confluent`, targeting o
 ## Features
 
 - **22 tools** - Kafka topic management, produce/consume, Schema Registry CRUD, Flink SQL Gateway, topic search, cluster info
+- **4 resources** - Read-only cluster state data (overview, health check, under-replicated partitions, consumer lag)
+- **4 prompts** - Pre-built diagnostic report templates for cluster health and troubleshooting
 - **Schema Registry** - Register, list, get, delete schemas; produce/consume with Avro serialization (Confluent wire format)
 - **Dual transport** - STDIO (subprocess) and HTTP/SSE (remote server)
 - **Drop-in compatible** - Same MCP tool names and response formats as mcp-confluent
@@ -271,6 +273,28 @@ Automatically enabled when `flink-sql-gateway.url` is configured.
 | `get-flink-job-status`  | Get the status of a Flink SQL operation                |
 | `cancel-flink-job`      | Cancel a running Flink SQL operation                   |
 
+## Available Resources
+
+MCP resources expose read-only Kafka cluster state as structured JSON data. Resources are automatically enabled when Kafka is configured.
+
+| Resource URI                             | Description                                                                                  |
+|------------------------------------------|----------------------------------------------------------------------------------------------|
+| `kafka-mcp://overview`                   | Cluster health summary: broker count, controller ID, topic/partition counts, health status    |
+| `kafka-mcp://health-check`               | Detailed health assessment: broker, controller, partition, and consumer group status           |
+| `kafka-mcp://under-replicated-partitions` | Analysis of partitions with ISR < replication factor, with troubleshooting recommendations    |
+| `kafka-mcp://consumer-lag-report`         | Consumer group lag metrics with group summaries, high-lag details, and recommendations        |
+
+## Available Prompts
+
+MCP prompts provide pre-built diagnostic report templates that generate human-readable markdown. Prompts are automatically enabled when Kafka is configured.
+
+| Prompt                                | Arguments                                    | Description                                                                            |
+|---------------------------------------|----------------------------------------------|----------------------------------------------------------------------------------------|
+| `kafka-cluster-overview`              | _(none)_                                     | Human-readable cluster summary with broker count, topics, partitions, and health status |
+| `kafka-health-check`                  | _(none)_                                     | Comprehensive health check report with status indicators for each subsystem             |
+| `kafka-under-replicated-partitions`   | _(none)_                                     | Under-replication report with affected partition table, causes, and recommendations      |
+| `kafka-consumer-lag-report`           | `threshold` (optional, default: `1000`)      | Consumer lag analysis with group summary table, high-lag details, and recommendations    |
+
 ### Schema Registry Serialization
 
 The `produce-message` and `consume-messages` tools support optional Schema Registry integration:
@@ -314,6 +338,7 @@ Tests use Testcontainers with `apache/kafka-native` and `cp-schema-registry` ima
 src/main/java/com/github/imcf/mcp/kafka/
   config/          # KafkaConfig, SchemaRegistryConfig, ToolFilter, StartupLogger
   client/          # KafkaClientManager, SchemaRegistryClient
+  model/           # ClusterOverview, ConsumerLagReport, UnderReplicatedPartitionReport, HealthReport
   serde/           # SchemaRegistrySerializer, SchemaRegistryDeserializer
   tools/
     BaseToolHandler.java
@@ -321,6 +346,12 @@ src/main/java/com/github/imcf/mcp/kafka/
     cluster/       # Cluster tools (describe-cluster)
     schema/        # Schema Registry tools (list, register, get, delete, compatibility)
     flink/         # Flink SQL Gateway tools (execute-sql, catalogs, databases, tables)
+  resources/
+    BaseResourceHandler.java
+    kafka/         # MCP resources (overview, health-check, under-replicated, consumer-lag)
+  prompts/
+    BasePromptHandler.java
+    kafka/         # MCP prompts (cluster-overview, health-check, under-replicated, consumer-lag)
 ```
 
 ## Roadmap
@@ -330,8 +361,9 @@ src/main/java/com/github/imcf/mcp/kafka/
 | **Phase 1** | Core Kafka tools, STDIO + HTTP/SSE transport, Docker     | Done    |
 | **Phase 2** | Schema Registry tools, SR serialization, topic search    | Done    |
 | **Phase 3** | Flink SQL Gateway tools                                  | Done    |
-| **Phase 4** | Kafka Connect tools                                      | Planned |
-| **Phase 5** | Consumer groups, API key auth, GraalVM native build      | Planned |
+| **Phase 4** | MCP Resources and Prompts for cluster observability      | Done    |
+| **Phase 5** | Kafka Connect tools                                      | Planned |
+| **Phase 6** | Consumer groups, API key auth, GraalVM native build      | Planned |
 
 ## License
 
