@@ -1,6 +1,6 @@
 plugins {
     java
-    id("io.quarkus") version "3.27.2"
+    id("io.quarkus") version "3.32.3"
 }
 
 repositories {
@@ -23,7 +23,7 @@ val quarkusPlatformVersion: String by project
 
 dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
-    implementation(platform("io.quarkiverse.mcp:quarkus-mcp-server-bom:1.10.2"))
+    implementation(platform("io.quarkiverse.mcp:quarkus-mcp-server-bom:1.10.3"))
 
     implementation("io.quarkus:quarkus-arc")
     implementation("io.quarkiverse.mcp:quarkus-mcp-server-stdio")
